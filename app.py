@@ -1,61 +1,93 @@
 import streamlit as st
-import numpy as np
 import matplotlib.pyplot as plt
-from reportlab.lib.pagesizes import A4
-from reportlab.pdfgen import canvas
+import numpy as np
 import io
+from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, Image
+from reportlab.lib.styles import getSampleStyleSheet
+from reportlab.lib.pagesizes import A4
 
-st.set_page_config(page_title="Body na kružnici", page_icon="🔵")
+st.set_page_config(page_title="Body na kružnici", layout="wide")
 
 st.title("🔵 Body na kružnici")
-st.write("Zadejte parametry a aplikace vykreslí body na kružnici.")
 
-x_center = st.number_input("X souřadnice středu (m)", value=0.0)
-y_center = st.number_input("Y souřadnice středu (m)", value=0.0)
-radius = st.number_input("Poloměr kružnice (m)", value=5.0, min_value=0.1)
-points = st.number_input("Počet bodů", value=6, min_value=1, step=1)
+# --- VSTUPY ---
+x0 = st.number_input("Souřadnice středu X [m]", value=0.0)
+y0 = st.number_input("Souřadnice středu Y [m]", value=0.0)
+r = st.number_input("Poloměr kružnice [m]", value=1.0, min_value=0.1)
+n = st.slider("Počet bodů na kružnici", 1, 100, 8)
 color = st.color_picker("Barva bodů", "#ff0000")
 
-angles = np.linspace(0, 2 * np.pi, int(points), endpoint=False)
-x_points = x_center + radius * np.cos(angles)
-y_points = y_center + radius * np.sin(angles)
+# --- VÝPOČET ---
+angles = np.linspace(0, 2*np.pi, n, endpoint=False)
+x_points = x0 + r * np.cos(angles)
+y_points = y0 + r * np.sin(angles)
 
+# --- VYKRESLENÍ ---
 fig, ax = plt.subplots()
-ax.scatter(x_points, y_points, c=color, label="Body")
-circle = plt.Circle((x_center, y_center), radius, color="gray", fill=False)
-ax.add_artist(circle)
-
+ax.set_aspect("equal")
+ax.plot(x_points, y_points, "o", color=color)
+circle = plt.Circle((x0, y0), r, fill=False, linestyle="--")
+ax.add_patch(circle)
 ax.axhline(0, color="black", linewidth=0.5)
 ax.axvline(0, color="black", linewidth=0.5)
-ax.set_xlabel("X (m)")
-ax.set_ylabel("Y (m)")
-ax.set_aspect("equal", adjustable="box")
-ax.legend()
-
+ax.set_xlabel("x [m]")
+ax.set_ylabel("y [m]")
+ax.set_title("Body na kružnici")
 st.pyplot(fig)
 
-if st.button("📄 Exportovat do PDF"):
-    buffer = io.BytesIO()
-    c = canvas.Canvas(buffer, pagesize=A4)
-    text = c.beginText(50, 800)
-    text.setFont("Helvetica", 12)
-    text.textLine("Body na kružnici - parametry úlohy:")
-    text.textLine(f"Střed: ({x_center}, {y_center}) m")
-    text.textLine(f"Poloměr: {radius} m")
-    text.textLine(f"Počet bodů: {points}")
-    text.textLine(f"Barva: {color}")
-    text.textLine("")
-    text.textLine("Autor: Jan Novák")
-    text.textLine("Kontakt: jan.novak@email.cz")
-    c.drawText(text)
-    c.showPage()
-    c.save()
+# --- EXPORT DO PDF ---
+st.subheader("📄 Export výsledku do PDF")
+
+author = st.text_input("Vaše jméno", "Jan Novák")
+contact = st.text_input("Kontakt (e-mail)", "jan.novak@email.cz")
+
+if st.button("Vytvořit PDF"):
+    # uložit graf do obrázku
+    img_buf = io.BytesIO()
+    fig.savefig(img_buf, format="png")
+    img_buf.seek(0)
+
+    # vytvoření PDF
+    pdf_buf = io.BytesIO()
+    doc = SimpleDocTemplate(pdf_buf, pagesize=A4)
+    styles = getSampleStyleSheet()
+    story = []
+
+    story.append(Paragraph("Body na kružnici - Výstup", styles["Title"]))
+    story.append(Spacer(1, 12))
+
+    params = f"""
+    <b>Parametry úlohy:</b><br/>
+    Střed: ({x0}, {y0}) m<br/>
+    Poloměr: {r} m<br/>
+    Počet bodů: {n}<br/>
+    Barva bodů: {color}<br/><br/>
+    <b>Autor:</b> {author}<br/>
+    <b>Kontakt:</b> {contact}
+    """
+    story.append(Paragraph(params, styles["Normal"]))
+    story.append(Spacer(1, 24))
+
+    # vložit graf do PDF
+    img = Image(img_buf, width=400, height=400)
+    story.append(img)
+
+    doc.build(story)
     st.download_button(
-        label="⬇️ Stáhnout PDF",
-        data=buffer.getvalue(),
+        "📥 Stáhnout PDF",
+        data=pdf_buf,
         file_name="body_na_kruznici.pdf",
-        mime="application/pdf",
+        mime="application/pdf"
     )
 
-if st.checkbox("ℹ️ Informace o aplikaci"):
-    st.info("Tato aplikace byla vytvořena v Pythonu pomocí knihoven Streamlit, NumPy, Matplotlib a ReportLab.")
+# --- O APLIKACI ---
+with st.expander("ℹ️ O aplikaci a použitých technologiích"):
+    st.markdown("""
+    **Autor:** Jan Novák  
+    **Kontakt:** jan.novak@email.cz  
+
+    Tato aplikace byla vytvořena v Pythonu pomocí:  
+    - [Streamlit](https://streamlit.io) pro webové rozhraní  
+    - [Matplotlib](https://matplotlib.org) pro grafy  
+    - [ReportLab](https://www.reportlab.com) pro generování PDF  
+    """)
